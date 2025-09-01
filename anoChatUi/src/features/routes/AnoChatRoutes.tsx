@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ChatHomeLayout from "@/components/layouts/ChatHomeLayout";
-import ChatRoom from "../chat/chatRoom/ChatRoom";
+import ChatRoom from "../chat/room/ChatRoom";
+import LoungePage from "../chat/ChatLounge/LoungePage";
 
 const AnoChatRoutes = () => {
   //state
@@ -11,8 +12,10 @@ const AnoChatRoutes = () => {
     <>
       <BrowserRouter>
         <Routes>
-          <Route path="/*" element={<ChatHomeLayout />} />
-          <Route path="/chat/:id" element={ <ChatRoom /> } />
+          <Route path="/" element={<ChatHomeLayout />}>
+            <Route index element={<LoungePage />} />
+            <Route path="chat/:id" element={<ChatRoom />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </>

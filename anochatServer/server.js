@@ -9,15 +9,32 @@ const app = express();
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("WebSocket server is running!");
+  res.send("Welcome to the ANON CHAT API");
 });
 
+//initializations
 const server = app.listen(PORT, () => {
   console.log("LISTENING ON PORT: ", PORT);
 });
 
+const wsServer = new WebSocketServer({ noServer : true });   //no server to handle upgrade manually 
+
+server.on("upgrade", (req, socket, head) => {
+  const { pathname } = parse(req.url);
+  
+  console.log(`WebSocket upgrade request for: ${pathname}`);
+
+  if (pathname === "/chat") {
+    wsServer.handleUpgrade(req, socket, head, (ws) => {
+      wsServer.emit("connection", ws, request, "chat");
+    });
+  } else {
+    socket.write('HTTP/1.1 404 NOT FOUND\r\n\r\n')
+    socket.destroy();
+  }
+});
+
 //getting websocket
-const wsServer = new WebSocketServer({ "server": server });
 let usersData = new Map();
 
 wsServer.on("connection", (ws, req) => {
@@ -45,7 +62,7 @@ wsServer.on("connection", (ws, req) => {
       message = msg.toString();
     }
     //console.log("message: ", msg, typeof msg, JSON.stringify(message));
-    
+
     if (typeof message == "object" && message.type === "userInfo") {
       usersData.set(ws, message.data);
     }

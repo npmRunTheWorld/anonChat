@@ -1,5 +1,4 @@
 import AnoChatRoutes from "./features/routes/AnoChatRoutes";
-
 const App = () => {
   //state
 
@@ -7,11 +6,7 @@ const App = () => {
 
   return (
     <>
-      <html>
-        <body>
-          <AnoChatRoutes />
-        </body>
-      </html>
+      <AnoChatRoutes />
     </>
   );
 };

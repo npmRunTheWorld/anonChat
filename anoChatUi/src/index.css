@@ -3,7 +3,10 @@
 :root {
   --primary: #2246acaa;
   --secondary: #112f81aa;
-  --t-yellow: #d6d5ac94;
+  --t-yellow: #d6d5ac77;
+  --t-yellow-1: #d6d5acbb;
+  --t-gray: #fffefea1;
+  --muted: rgba(150, 149, 149, 0.596);
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -14,9 +17,14 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-html {
-  
+@theme inline {
+  --color-bg-t-gray: var(--t-gray);
+  --color-t-gray: var(--t-gray);
+  --color-muted: rgba(150, 149, 149, 0.596);
+  --color-bg-muted: rgba(150, 149, 149, 0.596);
 }
+
+html {}
 
 body {
   margin: 0;
@@ -31,9 +39,19 @@ h1 {
   line-height: 1.1;
 }
 
-.border{
+.border {
   border: 1px solid white;
 }
 
+input{
+  border: 1px solid ;
+  padding: 0.25rem;
+  border-radius: 5px;
+}
 
-
+button{
+  cursor: pointer;
+  border: 1px solid var(--muted);
+  padding: 0.25rem;
+  border-radius: 5px;
+}
