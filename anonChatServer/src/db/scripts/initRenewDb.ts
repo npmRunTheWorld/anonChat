@@ -1,6 +1,6 @@
 import fs from "fs";
 import readline from "readline";
-import { docStatPath } from "../docs/anonDbCore.ts";
+import { docStatPath } from "../methods/anonDbCore.ts";
 
 const initialStatsDoc = {
   activeRooms: 0,

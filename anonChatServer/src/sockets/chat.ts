@@ -1,7 +1,7 @@
 import {
   statsCache,
   updateStatsDoc,
-} from "@/db/docs/docs/statsDocTransactions.ts";
+} from "@/db/methods/documentBuilders/statsDocTransactions.ts";
 import WebSocket, { WebSocketServer } from "ws";
 import type { RawData } from "ws";
 

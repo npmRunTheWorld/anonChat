@@ -3,7 +3,7 @@ import { initializeWebSocketServer } from "./sockets/index.ts";
 import loungeRouter from "./routes/LoungeInfo.ts";
 import cors from "cors";
 import * as dotenv from "dotenv";
-import { initStats } from "./db/docs/docs/statsDocTransactions.ts";
+import { initStats } from "./db/methods/docs/statsDocTransactions.ts";
 import { initDb } from "./db/scripts/initDb.ts";
 
 dotenv.config();

@@ -3,7 +3,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import lockfile, { lock } from "proper-lockfile";
 import writeFileAtomic from "write-file-atomic";
-import { initialStatsDoc } from "./docs/statsDocTransactions.ts";
+import { initialStatsDoc } from "./documentBuilders/statsDocTransactions.ts";
 
 //@TYPES
 export type DocsType = {

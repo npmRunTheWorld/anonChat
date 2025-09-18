@@ -1,4 +1,4 @@
-import { initializeDatabaseJSON } from "@/db/docs/anonDbCore.ts";
+import { initializeDatabaseJSON } from "@/db/methods/anonDbCore.ts";
 
 initializeDatabaseJSON();
 
