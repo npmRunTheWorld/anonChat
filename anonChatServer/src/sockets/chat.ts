@@ -1,30 +1,34 @@
+import {
+  statsCache,
+  updateStatsDoc,
+} from "@/db/docs/docs/statsDocTransactions.ts";
 import WebSocket, { WebSocketServer } from "ws";
 import type { RawData } from "ws";
 
-export type UserMapType = Map<
-  string,
-  {
-    connection: WebSocket;
-    data: string;
-    usernameAndId: string;
-    username: string;
-    roomId: string;
-    port: string;
-    userColor: string;
-  }
->;
+type UserType = {
+  connection: CustomWebSocket;
+  data: string;
+  usernameAndId: string;
+  username: string;
+  roomId: string;
+  port: string;
+  userColor: string;
+};
 
-export type RoomMapType = Map<
-  string,
-  {
-    users: string[];
-    roomTitle?: string;
-    roomTopics?: string[] | string;
-    isPublic: boolean;
-    hostId: string;
-    hostUsername: string;
-  }
->;
+export type UserMapType = Map<string, UserType>;
+
+export type RoomType = {
+  users: string[];
+  roomTitle?: string;
+  roomTopics?: string[] | string;
+  isPublic: boolean;
+  hostId: string;
+  hostUsername: string;
+  totalUsers: number;
+  totalMessages: number;
+  [keyof: string]: any;
+};
+export type RoomMapType = Map<string, RoomType>;
 
 export type CustomWebSocket = WebSocket & {
   usernameAndId: string;
@@ -40,15 +44,17 @@ export type ClientMessageType =
       [key: string]: any;
     };
 
-export type ServerMessageType =
-  | string
-  | {
-      serverType: string;
-      [key: string]: any;
-    };
+export type ServerMessageType = {
+  emitType: "roomData" | "message" | string;
+  messageType?: "chat" | "systemMessage" | "serverFailure" | string;
+  username: "system" | string;
+  data: string | Record<string, any>;
+  [key: string]: any;
+};
 
-const userMap: UserMapType = new Map();
-const roomMap: RoomMapType = new Map();
+export const userMap: UserMapType = new Map();
+export const roomMap: RoomMapType = new Map<string, RoomType>();
+
 const bgColors = [
   "#ef444426", // red-500
   "#f9731626", // orange-500
@@ -72,7 +78,7 @@ const bgColors = [
   "#37415126", // gray-700
 ];
 
-function broadcastAll(data, wss) {
+function broadcastAll(data: string, wss: WebSocketServer) {
   wss.clients.forEach((ws) => {
     if (ws.readyState === ws.OPEN) {
       const msg = JSON.stringify(data);
@@ -86,14 +92,43 @@ function broadCastToRoom(msg: ServerMessageType, ws: CustomWebSocket) {
   //console.log("broadcasting to room :", ws.roomId);
 
   const roomId = ws.roomId;
-  const usersInRoom = roomMap.get(roomId)?.users;
+  const room = roomMap.get(roomId) as RoomType | undefined;
+  const usersInRoom = room?.users ?? [];
 
-  usersInRoom!.forEach((user: string) => {
+  if (!room) return;
+
+  if (msg.emitType === "message" && msg.messageType === "chat") {
+    roomMap.set(roomId, {
+      ...room,
+      totalMessages: room?.totalMessages + 1,
+    });
+  }
+  usersInRoom.forEach((user: string) => {
     const userObj = userMap.get(user);
     if (!userObj) return;
     const userSocket = userObj.connection;
     userSocket.send(JSON.stringify(msg));
   });
+}
+
+function broadCastToRoomAndExcludeFollowingUsers(
+  msg: ServerMessageType,
+  ws: CustomWebSocket,
+  users: string[]
+) {
+  //console.log("broadcasting to room :", ws.roomId);
+
+  const roomId = ws.roomId;
+  const usersInRoom = roomMap.get(roomId)?.users ?? [];
+
+  usersInRoom
+    .filter((user) => !users.includes(user))
+    .forEach((user: string) => {
+      const userObj = userMap.get(user);
+      if (!userObj) return;
+      const userSocket = userObj.connection;
+      userSocket.send(JSON.stringify(msg));
+    });
 }
 
 /* ROOM DATA ONLY TO ALL*/
@@ -125,7 +160,7 @@ function broadcastRoomData(ws: CustomWebSocket) {
 
   broadCastToRoom(
     {
-      serverType: "roomData",
+      emitType: "roomData",
       username: "system",
       data: {
         users: userInfoAgg,
@@ -152,7 +187,8 @@ function closeConnection(
 ) {
   ws.send(
     JSON.stringify({
-      serverType: "message",
+      emitType: "message",
+      messageType: "systemFailure",
       username: "system",
       data: msg,
       time: new Date().toLocaleTimeString(),
@@ -199,6 +235,12 @@ function addUser(ws: CustomWebSocket, msg: ClientMessageType) {
       roomTopics: msg.data.topics,
       hostId: ws.usernameAndId,
       hostUsername: ws.username,
+      totalUsers: 1,
+      totalMessages: 0,
+    });
+
+    updateStatsDoc({
+      activeRooms: statsCache?.activeRooms + 1,
     });
   } else {
     //other users (PARTICIPANTS)
@@ -208,6 +250,7 @@ function addUser(ws: CustomWebSocket, msg: ClientMessageType) {
     roomMap.set(ws.roomId, {
       ...prevRoomData,
       users: [...prevUsers, ws.usernameAndId],
+      totalUsers: prevRoomData.totalUsers + 1,
     });
   }
 
@@ -222,9 +265,24 @@ function addUser(ws: CustomWebSocket, msg: ClientMessageType) {
     userColor: bgColors[Number(ws.port) % bgColors.length],
   });
 
-  console.log("users in room: ", ws.roomId, "---->", roomMap.get(ws.roomId));
+  logRoomData(ws);
+
+  const userActivity: ServerMessageType = {
+    emitType: "message",
+    messageType: "systemMessage",
+    username: "system",
+    data: `${ws.username} has entered the room!`,
+    isSystemMsg: true,
+    time: new Date().toLocaleDateString(),
+  };
+  broadCastToRoomAndExcludeFollowingUsers(userActivity, ws, [
+    `${ws.usernameAndId}`,
+  ]);
 }
 
+function logRoomData(ws: CustomWebSocket) {
+  console.log("users in room: ", ws.roomId, "---->", roomMap.get(ws.roomId));
+}
 function userRecord(ws: CustomWebSocket, msg: ClientMessageType) {
   if (typeof msg === "string") return;
 
@@ -262,6 +320,28 @@ function userRecord(ws: CustomWebSocket, msg: ClientMessageType) {
   broadcastRoomData(ws);
 }
 
+function handleLastUserDisconnect(
+  users: RoomType["users"],
+  ws: CustomWebSocket,
+  room: RoomType
+) {
+  console.log("Room Closed updating db", users, room);
+  if (!users || users.length === 1) {
+    // deletes the room completely when last user leaves
+    if (!room) return;
+
+    updateStatsDoc({
+      activeRooms: statsCache?.activeRooms - 1,
+      totalUsers: room?.totalUsers,
+      secretsShared: room?.totalMessages,
+    });
+
+    roomMap.delete(ws.roomId);
+    userMap.delete(ws.usernameAndId);
+    return;
+  }
+}
+
 export function setupChatHandler(ws: CustomWebSocket, wss: WebSocketServer) {
   ws.on("message", (message: RawData) => {
     let msg: ClientMessageType = "";
@@ -297,7 +377,8 @@ export function setupChatHandler(ws: CustomWebSocket, wss: WebSocketServer) {
       }
 
       const sentMsgObj: ServerMessageType = {
-        serverType: "message",
+        emitType: "message",
+        messageType: "chat",
         usernameAndId: user.usernameAndId,
         username: user.username,
         port: user.port,
@@ -312,29 +393,70 @@ export function setupChatHandler(ws: CustomWebSocket, wss: WebSocketServer) {
   });
 
   ws.on("close", () => {
-    let users = roomMap.get(ws.roomId)?.users ?? [];
-      
-    if (!users || users.length === 0) {
-      //deletes the room completely to ensure full privacy when the final user leaves (no lingering rooms)
-      roomMap.delete(ws.roomId);
+    const prevRoomData = roomMap.get(ws.roomId) as RoomType;
+    let users = prevRoomData?.users ?? [];
+    handleLastUserDisconnect(users, ws, prevRoomData);
+
+    if (!prevRoomData) {
+      userMap.delete(ws.usernameAndId);
       return;
     }
-    
-    const prevRoomData = roomMap.get(ws.roomId);
-    if (!prevRoomData) return;
+
+    // remove the user from the room
+    const updatedUsers = users.filter((user) => user !== ws.usernameAndId);
+
+    let newHostId = prevRoomData.hostId;
+    let newHostUsername = prevRoomData.hostUsername;
 
     if (ws.usernameAndId === prevRoomData.hostId || !prevRoomData.hostId) {
-      //the user that disconnected was a host (update new host)
-      let recentTopUser = roomMap.get(ws.roomId)?.users;
-      prevRoomData.hostId === recentTopUser?.[0];
+      // current host left → assign new host
+      if (updatedUsers.length > 0) {
+        const firstUserId = updatedUsers[0];
+        const firstUserObj = userMap.get(firstUserId);
+        if (firstUserObj) {
+          newHostId = firstUserObj.usernameAndId;
+          newHostUsername = firstUserObj.username;
+        } else {
+          // fallback: no user object found, clear host
+          newHostId = "";
+          newHostUsername = "";
+        }
+      } else {
+        newHostId = "";
+        newHostUsername = "";
+      }
     }
 
+    // update room
     roomMap.set(ws.roomId, {
       ...prevRoomData,
-      users: users?.filter((user) => user !== ws.usernameAndId),
+      users: updatedUsers,
+      hostId: newHostId,
+      hostUsername: newHostUsername,
     });
-    
+
+    // remove user
     userMap.delete(ws.usernameAndId);
-    broadcastRoomData(ws);
+    // notify room
+    if (updatedUsers.length > 0) {
+      const anyRemainingUser: UserType | undefined = userMap.get(
+        updatedUsers[0]
+      );
+      if (anyRemainingUser) {
+        logRoomData(ws);
+        broadcastRoomData(anyRemainingUser?.connection);
+
+        broadCastToRoom(
+          {
+            emitType: "message",
+            messageType: "systemMessage",
+            username: "system",
+            data: `${ws.username} has left the room.`,
+            textColor: "#8F0E28",
+          },
+          anyRemainingUser?.connection
+        );
+      }
+    }
   });
 }

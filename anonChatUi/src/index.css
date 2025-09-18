@@ -24,6 +24,11 @@
   --color-bg-muted: rgba(150, 149, 149, 0.596);
 }
 
+@utility safe-scroll {
+  scrollbar-gutter: stable both-edges;
+}
+
+
 html {}
 
 body {
@@ -43,14 +48,14 @@ h1 {
   border: 1px solid white;
 }
 
-input{
+input {
   border: 1px solid var(--muted);
   padding: 0.25rem;
   border-radius: 5px;
   outline: none;
 }
 
-button{
+button {
   cursor: pointer;
   border: 1px solid var(--muted);
   padding: 0.25rem;
@@ -59,6 +64,6 @@ button{
   color: black;
 }
 
-button:hover{
+button:hover {
   background-color: rgba(150, 149, 149, 0.3);
 }

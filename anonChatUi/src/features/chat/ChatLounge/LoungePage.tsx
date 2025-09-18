@@ -1,86 +1,66 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import CreateRoomModals from "@/components/ui/modals/CreateRoomModals";
 import { useNavigate } from "react-router-dom";
-import { clearStorageRoomData, setStorageRoomData, setStorageUsername } from "@/utils/fx/sessionStorage";
+import {
+  clearStorageRoomData,
+  getStorageUsername,
+} from "@/utils/fx/sessionStorage";
+import { validate as uuidValidate } from "uuid";
+import { apiUrl } from "@/utils/constants/envVar";
+import { BiUserCircle } from "react-icons/bi";
 
-const ChatLounge = () => (
-  <div className="space-y-4">
-    {[
-      {
-        id: 1,
-        name: "midnight_whispers",
-        users: 23,
-        topic: "late night thoughts",
-        //mood: "🌙",
-      },
-      {
-        id: 2,
-        name: "neon_shadows",
-        users: 67,
-        topic: "cyberpunk discussions",
-        //mood: "⚡",
-      },
-      {
-        id: 3,
-        name: "coffee_strangers",
-        users: 12,
-        topic: "random conversations",
-        //mood: "☕",
-      },
-      {
-        id: 4,
-        name: "void_talkers",
-        users: 89,
-        topic: "existential chats",
-        //mood: "🌌",
-      },
-      {
-        id: 5,
-        name: "digital_ghosts",
-        users: 45,
-        topic: "tech & philosophy",
-        //mood: "👻",
-      },
-      {
-        id: 6,
-        name: "broken_pixels",
-        users: 34,
-        topic: "art & creativity",
-        //mood: "🎨",
-      },
-    ].map((room, i) => (
-      <motion.div
-        key={room.id}
-        className="group relative"
-        initial={{ x: -50, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ delay: i * 0.1, duration: 0.6 }}
-      >
-        <div className="flex items-center gap-6 p-6 bg-gradient-to-r from-red-950/30 to-transparent border-l-4 border-orange-500 hover:border-l-8 transition-all duration-500 hover:bg-red-900/20">
-          {/* <div className="text-4xl">{room.//mood}</div> */}
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-orange-400 text-lg">
-                #{room.name}
-              </span>
-              <div className="px-2 py-1 bg-red-900/50 text-red-200 text-xs rounded font-mono">
-                {room.users} anon
-              </div>
-            </div>
-            <p className="text-gray-400 text-sm mt-1 font-mono">{room.topic}</p>
-          </div>
-          <motion.button
-            className="opacity-0 group-hover:opacity-100 px-4 py-2 bg-orange-600/80 text-black font-bold text-sm rounded-none hover:bg-orange-500 transition-all"
-            whileHover={{ x: 5 }}
+const ChatLounge = ({ roomsObj }: { roomsObj: Record<string, any> }) => {
+  const rooms = Object.entries(roomsObj);
+  const navigate = useNavigate();
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 space-y-4">
+      {rooms.length == 0 ? (
+        <p className="text-muted">No Public Rooms Available</p>
+      ) : (
+        rooms.map(([roomId, room], i) => (
+          <motion.div
+            key={roomId}
+            className="group relative"
+            initial={{ x: -50, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: i * 0.1, duration: 0.6 }}
           >
-            ENTER →
-          </motion.button>
-        </div>
-      </motion.div>
-    ))}
-  </div>
-);
+            <div className="flex items-center gap-6 p-6 bg-gradient-to-r from-red-950/30 to-transparent border-l-4 border-orange-500 hover:border-l-8 transition-all duration-500 hover:bg-red-900/20">
+              {/* <div className="text-4xl">{room.//mood}</div> */}
+              <div className="flex-1">
+                <div className="flex flex-col justify-center items-start gap-3">
+                  <div className="flex  gap-2 justify-center items-center px-2 py-1 bg-red-900/50 text-red-200 text-xs rounded font-mono">
+                    <BiUserCircle /> {room.anonUsersCount} anon
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="font-mono text-orange-400 text-md">
+                      <span className="!text-white">Title: </span>
+                      {room?.roomTitle ?? "No Title Given"}
+                    </span>
+                  </div>
+                  <span className="font-mono text-orange-400 text-lg text-sm">
+                    <span className="!text-white">ID:</span> {roomId}
+                  </span>
+                </div>
+                <p className="text-gray-400 text-sm mt-1 font-mono">
+                  {room.roomTopics}
+                </p>
+              </div>
+              <motion.button
+                className="opacity-100 md:opacity-1 group-hover:opacity-100 px-4 py-2 !bg-orange-600/80 text-black font-bold text-sm rounded-none hover:!bg-orange-500 transition-all"
+                whileHover={{ x: 5 }}
+                onClick={() => navigate(`chat/${roomId}`)}
+              >
+                ENTER ROOM →
+              </motion.button>
+            </div>
+          </motion.div>
+        ))
+      )}
+    </div>
+  );
+};
 
 const LoungeAnalytics = () => {
   const stats = [
@@ -114,33 +94,69 @@ const LoungeAnalytics = () => {
 
 const LoungePage = () => {
   const navigate = useNavigate();
-
   const [isModalShowing, setIsModalShowing] = useState(false);
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(getStorageUsername);
   const [roomId, setRoomId] = useState("");
+  const [roomsObj, setRoomsObj] = useState({});
+  const [fieldError, setFieldError] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    async function getRoomInfo() {
+      console.log("api route: ", `${apiUrl}/api/v1/loungeInfo/getRooms`);
+      const roomRes = await fetch(`${apiUrl}/api/v1/loungeInfo/getRooms`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const roomData = await roomRes.json();
+      setRoomsObj(roomData.data);
+      console.log(roomData);
+    }
+
+    getRoomInfo();
+  }, []);
 
   function goToChatRoom(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const username = form.get("username") ?? "";
     const roomId = form.get("roomId") ?? "";
+    /* const username = form.get("username") ?? ""; */
 
-    if (!username) {
+    /*  if (!username) {
       console.log(
         "ERROR: a username must be present, please enter your username before entering another room"
       );
       return;
-    }
+    } */
 
-    if (!roomId) {
-      console.log(
-        "ERROR: a room ID must be present, please enter a room id to go the room"
-      );
-    }
+    const getRoomIdFromUrl = String(roomId).split("/chat/")[1] ?? undefined;
+    console.log(
+      "the domain infos: ",
+      getRoomIdFromUrl,
+      `chat/${getRoomIdFromUrl}`
+    );
 
-    setStorageUsername(JSON.stringify(username));
+    /* setStorageUsername(JSON.stringify(username)); */
     clearStorageRoomData();
-    navigate(`/chat/${roomId}`);
+
+    //url+roomId
+    if (getRoomIdFromUrl) {
+      if (!uuidValidate(getRoomIdFromUrl)) {
+        setFieldError((prev) => ({ ...prev, roomId: "Invalid room id" }));
+        return;
+      }
+
+      navigate(`chat/${getRoomIdFromUrl}`);
+      return;
+    }
+    //standard roomId
+    if (!uuidValidate(roomId)) {
+      setFieldError((prev) => ({ ...prev, roomId: "Invalid room id" }));
+      return;
+    }
+    navigate(`chat/${roomId}`);
   }
 
   return (
@@ -239,24 +255,24 @@ const LoungePage = () => {
               className="grid md:grid-cols-3 gap-8 items-center"
               initial={{ y: 50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 1 }}
             >
               <motion.button
                 onClick={() => setIsModalShowing(true)}
-                className="md:col-span-2 p-8 bg-gradient-to-r from-neutral-500 to-red-100 text-black font-mono font-black text-xl uppercase tracking-widest hover:to-red-500 hover:from-gray-800 transition-all duration-300 transform hover:skew-x-2"
+                className="md:col-span-2 p-8 bg-gradient-to-r from-neutral-500 via-white to-neutral-500 text-black font-mono font-black text-xl uppercase tracking-widest hover:to-red-500 hover:via-black hover:from-red-500 hover:!text-orange-500 transition-all duration-300 transform hover:skew-x-2"
               >
                 + Launch New Room
               </motion.button>
 
               <form className="space-y-4" onSubmit={goToChatRoom}>
-                <div className="flex gap-1">
-                  <input
+                <div className="flex flex-col">
+                  {/* <input
                     className="w-full px-0 py-4 bg-transparent border-b-2 border-red-900 text-orange-300 font-mono text-lg focus:outline-none focus:border-orange-500 placeholder-gray-600"
                     placeholder="Username"
                     type="text"
                     onChange={(e) => setUsername(e.target.value)}
                     name="username"
-                  />
+                    value={username}
+                  /> */}
                   <input
                     value={roomId}
                     onChange={(e) => setRoomId(e.target.value)}
@@ -265,15 +281,33 @@ const LoungePage = () => {
                     type="text"
                     name="roomId"
                   />
+                  <motion.span
+                    className="flex justify-end h-2 text-red-600 text-sm capitalize"
+                    animate={{
+                      color: [
+                        "var(--color-red-800)",
+                        "var(--color-orange-500)",
+                        "var(--color-pink-800)",
+                        
+                      ],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      repeatType: "loop",
+                    }}
+                  >
+                    {fieldError.roomId && <p>{fieldError.roomId}</p>}
+                  </motion.span>
                 </div>
                 <button
-                  className="w-full py-3 border-2 border-orange-500 text-orange-500 font-mono uppercase text-sm hover:bg-orange-500 hover:text-black transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                  disabled={!roomId.trim() || !username.trim()}
+                  className="w-full py-3 border-2 !bg-white !border-orange-500 !text-orange-500 font-mono uppercase text-sm hover:!bg-orange-500 hover:!text-black transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:!text-muted disabled:hover:!bg-white"
+                  disabled={!roomId.trim()}
                   type="submit"
                 >
-                  {roomId.trim().length > 0 && username.trim().length > 0
+                  {roomId.trim().length > 0
                     ? ">> ENTER ROOM"
-                    : "ENTER A USERNAME & ROOM ID"}
+                    : "ENTER A ROOM ID"}
                 </button>
               </form>
             </motion.div>
@@ -306,7 +340,7 @@ const LoungePage = () => {
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                 <span>SYSTEM ONLINE - {new Date().toLocaleTimeString()}</span>
               </div>
-              <ChatLounge />
+              <ChatLounge roomsObj={roomsObj} />
             </div>
           </motion.div>
 

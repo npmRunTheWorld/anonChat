@@ -1,7 +1,21 @@
+//USERNAME
+export function getStorageUsername() {
+  try {
+    return JSON.parse(sessionStorage.getItem("anochat-username") ?? "");
+  } catch (error) {
+    return "";
+  }
+}
+
 export function setStorageUsername(username: string) {
   sessionStorage.setItem("anochat-username", username);
 }
 
+export function clearStorageUsername() {
+  sessionStorage.removeItem("anochat-username");
+}
+
+//ROOM DATA
 export function setStorageRoomData({
   title,
   topics,
@@ -19,10 +33,6 @@ export function setStorageRoomData({
       isPublic: isPublic ?? false,
     })
   );
-}
-
-export function clearStorageUsername() {
-  sessionStorage.removeItem("anochat-username");
 }
 
 export function clearStorageRoomData() {

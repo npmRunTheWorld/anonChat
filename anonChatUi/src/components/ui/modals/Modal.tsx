@@ -1,6 +1,6 @@
 // Modal.tsx
 import { motion } from "framer-motion";
-import React, { Children, type SetStateAction } from "react";
+import React, { type SetStateAction } from "react";
 
 interface ModalProps {
   isOpen: boolean;
@@ -16,12 +16,8 @@ interface ModalProps {
 export default function Modal({
   isOpen,
   setIsOpen,
-  onClose,
   title,
   children,
-  footer,
-  type,
-  modalClass,
 }: ModalProps) {
   if (!isOpen) return null;
 
@@ -43,7 +39,16 @@ export default function Modal({
               "polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))",
           }}
         >
-          {children}
+          <div className="p-8">
+            {/* TITLE */}
+            <section className="flex items-center gap-3 mb-6">
+              <div className="w-3 h-3 bg-red-500"></div>
+              <h3 className="text-2xl font-mono text-orange-400 uppercase tracking-wide">
+                {title}
+              </h3>
+            </section>
+            {children}
+          </div>
         </motion.div>
       </motion.div>
     </>

@@ -1,0 +1,1 @@
+export const FLUSH_INTERVAL = 10000; //ms <10sec>

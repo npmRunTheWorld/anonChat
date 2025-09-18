@@ -1,21 +1,16 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type SetStateAction,
-} from "react";
-import { isMotionComponent, motion } from "framer-motion";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { motion } from "framer-motion";
+import { useParams } from "react-router-dom";
 import Modal from "@/components/ui/modals/Modal";
-import { FaCrown } from "react-icons/fa";
 import { useDeviceDetails } from "@/hooks/useDeviceDetails";
-import { CiSettings } from "react-icons/ci";
-import { BiCopy, BiLock, BiLockOpen } from "react-icons/bi";
-import { BsBack, BsChevronBarLeft } from "react-icons/bs";
+import NotificationStack, {
+  type NotificationItem,
+} from "@/components/ui/notifications/NotificationStack";
+import ChatRoomUsernameEntryModal from "@/components/ui/modals/ChatRoomUsernameEntryModal";
+import { apiDomain } from "@/utils/constants/envVar";
+import RoomDetails from "./RoomDetails";
 
-type RoomData = {
+export type RoomData = {
   users: {
     usernameAndId: string | null;
     username: string | null;
@@ -30,11 +25,12 @@ type RoomData = {
   isPublic: boolean;
 };
 
-type SocketMsgObject = {
-  serverType: string;
+export type SocketMsgObject = {
+  emitType: string;
   username: string;
   port: string;
-  userColor: string;
+  userColor?: string;
+  textColor?: string;
   time: string;
   data: string | RoomData;
   bgColor: string;
@@ -47,9 +43,15 @@ type SocketMsgObject = {
   };
 };
 
+export type CustomWebSocket = WebSocket & {
+  usernameAndId: string;
+  username: string;
+  port: string;
+  roomId: string;
+};
+
 const ChatRoom = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const userSSkey = "anochat-username";
   const roomSSKey = "anonchat-roomData";
   const userSS = sessionStorage.getItem(userSSkey);
@@ -78,10 +80,19 @@ const ChatRoom = () => {
     topics: [],
     isPublic: false,
   });
+  const [notifications, setNotifications] = useState<NotificationItem[] | []>(
+    []
+  );
 
-  const [isMobileLeftPanelClicked, setIsMobileLeftPanelClicked] =
-    useState(false);
-  const isMobileLeftPanelExpanded = isMobile && isMobileLeftPanelClicked;
+  const [isShowRoomDetails, setIsShowRoomDetails] = useState(false);
+  const isMobileAndShowRoomDetails = isMobile && isShowRoomDetails;
+
+  const MAX_MSG = 50;
+  const [maximumMsgShown, setMaximumMsgShown] = useState(MAX_MSG);
+  const messageSliceStartPointer =
+    messages.length - maximumMsgShown > 0
+      ? messages.length - maximumMsgShown
+      : 0;
 
   const clearError = {
     code: "",
@@ -95,56 +106,39 @@ const ChatRoom = () => {
   const mainChatRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const userNameUpdateRef = useRef<HTMLInputElement | null>(null);
+  const messageBoxRef = useRef<HTMLDivElement | null>(null);
   const ws = useRef<WebSocket | null>(null);
-
-  const sendMessage = (e: FormEvent) => {
-    e.preventDefault();
-
-    if (!ws.current) {
-      alert(
-        "unable to send message please go back to lounge and create a new chat"
-      );
-      return;
-    }
-
-    if (!inputRef.current) {
-      console.log("Error input field not found, msg not send");
-      return;
-    }
-
-    const msg = inputRef?.current?.value ?? "";
-    console.log(msg);
-    ws.current.send(msg);
-    inputRef.current.value = "";
-  };
 
   //lifecycle
   useEffect(() => {
     //app init
-    let roomSSData = null;
+    let roomSSData: RoomData | null = null;
     function appInit() {
       try {
         roomSSData = JSON.parse(sessionStorage.getItem(roomSSKey) ?? "");
+
         setRoomData((prev) => ({
           ...prev,
-          title: roomSSData!.title ?? null,
-          topics: roomSSData!.topics ?? null,
-          isPublic: roomSSData!.isPublic ?? false,
+          title: roomSSData?.title ?? prev.title,
+          topics: roomSSData?.topics ?? prev.topics,
+          isPublic: roomSSData?.isPublic ?? prev.isPublic,
         }));
       } catch (e) {
         setRoomData((prev) => ({
           ...prev,
         }));
       }
+    }
 
-      if (!username || username == "") {
-        navigate("/");
-      }
+    if (!username || username == "") {
+      return;
     }
 
     appInit();
+
     //web socket connection
-    ws.current = new WebSocket("ws://localhost:8000/chat");
+    console.log("api domain", apiDomain);
+    ws.current = new WebSocket(`ws://${apiDomain}/chat`);
 
     if (!ws.current) {
       return;
@@ -182,7 +176,7 @@ const ChatRoom = () => {
     ws.current.onmessage = (event) => {
       const msgObj: SocketMsgObject = JSON.parse(event.data);
 
-      if (msgObj.serverType === "roomData") {
+      if (msgObj.emitType === "roomData") {
         //init room
         console.log(msgObj.data);
         if (typeof msgObj.data === "string") {
@@ -190,8 +184,6 @@ const ChatRoom = () => {
         }
 
         const roomUsers = msgObj.data as RoomData;
-        /* sessionStorage.setItem(userSSKey, roomUsers.currUsernameAndId as string); */
-        setUserName(roomUsers?.currUsername ?? ("" as string));
 
         setRoomData((prev) => ({
           ...prev,
@@ -206,12 +198,13 @@ const ChatRoom = () => {
         return;
       }
 
-      if (msgObj.serverType === "message") {
+      if (msgObj.emitType === "message") {
         if (msgObj.error) {
           setIsError(msgObj.error);
         }
 
         setMessages((prev) => [...prev, { ...msgObj }]);
+        scrollToLastMessage();
         return;
       }
     };
@@ -219,19 +212,37 @@ const ChatRoom = () => {
     return () => {
       ws.current!.close();
     };
-  }, []);
+  }, [username]);
 
   useEffect(() => {
+    let roomDetailsMobileShowTimeout: number | null = null;
+
     function scrollChatIntoView() {
       if (mainChatRef.current) {
-        mainChatRef.current?.scrollIntoView({
+        mainChatRef.current.scrollIntoView({
           behavior: "smooth",
         });
+      }
+      scrollToLastMessage();
+    }
+
+    function mobileOnlyAutoHideRoomDetails() {
+      if (isMobile) {
+        roomDetailsMobileShowTimeout = window.setTimeout(() => {
+          setIsShowRoomDetails(false);
+        }, 3000);
       }
     }
 
     scrollChatIntoView();
-  }, [mainChatRef.current]);
+    mobileOnlyAutoHideRoomDetails();
+
+    return () => {
+      if (roomDetailsMobileShowTimeout !== null) {
+        clearTimeout(roomDetailsMobileShowTimeout);
+      }
+    };
+  }, []);
 
   //functions
   function setSessionUsername(name: string) {
@@ -270,36 +281,60 @@ const ChatRoom = () => {
     }
   }
 
-  function leaveRoom(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
+  const sendMessage = (e: FormEvent) => {
     e.preventDefault();
-    ws.current?.close();
-    sessionStorage.removeItem("anochat-username");
-    navigate("/");
+
+    if (!ws.current) {
+      alert(
+        "unable to send message please go back to lounge and create a new chat"
+      );
+      return;
+    }
+
+    if (!inputRef.current) {
+      console.log("Error input field not found, msg not send");
+      return;
+    }
+
+    const msg = inputRef?.current?.value ?? "";
+    if (!msg.length) return;
+
+    console.log(msg);
+    ws.current.send(msg);
+    inputRef.current.value = "";
+
+    scrollToLastMessage();
+  };
+
+  function scrollToLastMessage() {
+    const container = messageBoxRef.current;
+    setTimeout(() => {
+      if (container) {
+        container.scrollTo({
+          top: container.scrollHeight + container.offsetHeight,
+          behavior: "smooth",
+        });
+      }
+    }, 200);
   }
 
-  function handleLeftPanelOpen(
+  /* function handleLeftPanelOpen(
     e: React.MouseEvent<HTMLButtonElement, MouseEvent>
   ) {
     e.preventDefault();
     console.log("clicking");
     setIsMobileLeftPanelClicked((prev) => (prev = !prev));
-  }
-
-  const prioSortedUsers = useMemo(() => {
-    const currentUser = roomData?.users.find((user) => {
-      console.log("FIND", user.username, username);
-      return user.username === username;
-    });
-    const otherUsers = roomData?.users.filter(
-      (user) => user.username !== username
-    );
-    console.log("RESULE", currentUser, otherUsers);
-    return currentUser ? [currentUser, ...otherUsers] : roomData?.users;
-  }, [username, roomData]);
+  } */
 
   return (
     <div className="min-h-screen w-full bg-black relative overflow-hidden font-mono">
       {/* Terminal grid background */}
+      <NotificationStack
+        notificationArr={notifications}
+        setNotificationArr={setNotifications}
+        notiStackClass="items-end pr-5 pt-2 !h-15"
+      />
+
       <div
         className="absolute inset-0 opacity-5 z-5"
         style={{
@@ -333,6 +368,10 @@ const ChatRoom = () => {
         style={{
           pointerEvents: "none",
         }}
+      />
+      <ChatRoomUsernameEntryModal
+        username={username}
+        setUsername={setUserName}
       />
       {/* UPDATE USER NAME MODAL */}
       <Modal isOpen={!!isError?.code} onClose={() => null} type={"input"}>
@@ -376,175 +415,31 @@ const ChatRoom = () => {
         id="main-chat"
         ref={mainChatRef}
       >
-        {/* Left Panel - Room Info & Users */}
-        <motion.section
-          className={`w-full h-3/8 md:h-full md:w-80 flex flex-col bg-gray-900/40 border border-red-900/30 `}
-          initial={{ x: -50, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.8 }}
-          style={{
-            clipPath:
-              "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))",
-          }}
-        >
-          {/* Terminal Header */}
-          <div className="p-4 border-b border-red-900/30 order-2 md:order-1">
-            <div className="space-y-2">
-              <div className="text-orange-400 font-mono">
-                <span className="text-gray-500">&gt;</span> ROOM:{" "}
-                {roomData?.title?.length ? (
-                  <span className="text-white">{roomData?.title}</span>
-                ) : (
-                  <span className="text-muted">###</span>
-                )}
-              </div>
-              <div className="text-gray-400 text-sm font-mono">
-                <span className="text-gray-500">&gt;</span> ID:{" "}
-                <span className="text-orange-300">{id}</span>
-              </div>
-              {roomData.topics && roomData.topics.length > 0 && (
-                <div className="text-gray-400 text-sm font-mono">
-                  {/*  <span className="text-gray-500">&gt;</span> TOPICS: {roomData.topics.map(topic => `[${topic}]`).join(" ")} */}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Users List*/}
-          <div className="flex-1 p-4 overflow-y-auto order-3 md:order-2">
-            <div className="mb-4">
-              <h3 className="text-red-400 font-bold text-sm uppercase font-mono">
-                ACTIVE_USERS [{prioSortedUsers.length}]
-              </h3>
-              <div className="h-px bg-red-600 mt-1 mb-3"></div>
-            </div>
-
-            <div className="space-y-2">
-              {prioSortedUsers.length === 0 ? (
-                <p className="text-white/40 font-mono text-sm">
-                  No users connected
-                </p>
-              ) : (
-                prioSortedUsers.map((user, userIndex) => (
-                  <motion.div
-                    key={`room-user-tag-${user.username}-${userIndex}`}
-                    className="group"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: userIndex * 0.1 }}
-                  >
-                    <div className="flex items-center gap-3 p-2 hover:bg-red-900/10 transition-all">
-                      <div
-                        className="w-3 h-3 border border-white/30"
-                        style={{ backgroundColor: user.userColor || "#666" }}
-                      ></div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          {roomData.hostId === user.usernameAndId && (
-                            <FaCrown className="text-yellow-400 text-xs" />
-                          )}
-                          <span className="text-white text-sm font-mono">
-                            {user.username}
-                          </span>
-                          {user.username === username && (
-                            <span className="text-green-400 text-xs font-mono">
-                              [YOU]
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-gray-500 text-xs font-mono">
-                          #{user.port}
-                        </div>
-                      </div>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Bottom Actions */}
-          <div className="flex flex-row-reverse md:flex-col justify-between p-1 gap-2 md:p-4 border-t border-red-900/30 md:space-y-2 order-1 md:order-3">
-            <button
-              onClick={() => {
-                if (id) {
-                  navigator.clipboard.writeText(id);
-                  alert("Room ID copied to clipboard!");
-                }
-              }}
-              className="w-fit md:w-full h-full py-2 !bg-orange-600/20 border !border-orange-600 !text-orange-400 text-sm font-bold uppercase hover:bg-orange-600/30 transition-all font-mono"
-            >
-              <span className="hidden md:flex">&gt; COPY_ROOM_ID</span>
-              <span className="flex md:hidden">
-                <BiCopy />
-              </span>
-            </button>
-
-            <div className="flex flex-col md:hidden items-center justify-center w-full text-sm ">
-              <div className="flex items-center gap-2">
-                {/* <div className="md:hidden">
-                  <button
-                    className="!bg-transparent !text-white !border-none cursor-pointer z-50"
-                    role="button"
-                    onClick={(e) => handleLeftPanelOpen(e)}
-                  >
-                    <CiSettings size={24} className="z-10" />
-                  </button> 
-                </div> */}
-                <div className="text-orange-400 text-sm font-mono">
-                  {roomData.isPublic ? <BiLockOpen /> : <BiLock />}
-                </div>
-
-                <p className="text-gray-400 text-xs font-mono">
-                  End-to-end encrypted • {messages.length} messages
-                </p>
-              </div>
-              {/* {
-                  <div className="flex items-center justify-end gap-2 w-full">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-green-400 text-xs uppercase font-mono">
-                      CONNECTED
-                    </span>
-                  </div>
-                } */}
-            </div>
-
-            <button
-              type="button"
-              onClick={(e) => leaveRoom(e)}
-              className="w-fit md:w-full h-full py-2 !bg-red-600/20 border !border-red-600 !text-red-400 text-sm font-bold uppercase hover:bg-red-600/30 transition-all font-mono"
-            >
-              <span className="hidden md:flex">&gt; DISCONNECT</span>
-              <span className="flex md:hidden">
-                <BsChevronBarLeft />
-              </span>
-            </button>
-          </div>
-        </motion.section>
+        {/*Room Info & Users list*/}
+        <RoomDetails
+          ws={ws}
+          roomData={roomData}
+          username={username}
+          isMobileAndShowRoomDetails={isMobileAndShowRoomDetails}
+          messages={messages}
+          id={id}
+          setNotifications={setNotifications}
+          setIsShowRoomDetails={setIsShowRoomDetails}
+        />
 
         {/* Main Chat Area */}
         <motion.section
-          className={`flex-1 md:w-full flex flex-col bg-gray-900/20 border border-red-900/20`}
+          className={`h-7/10 md:h-full md:flex-1 md:w-4/5 flex flex-col bg-gray-900/20 border border-red-900/20 ${
+            isMobileAndShowRoomDetails && "h-full"
+          }`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
         >
           {/* Chat Header */}
-          <div className="flex flex-wrap md:justify-center p-4 border-b border-red-900/30 bg-black/20 overflow-hidden">
+          <div className="hidden md:flex flex-wrap md:justify-center p-4 border-b border-red-900/30 bg-black/20 overflow-hidden">
             <div className="hidden md:flex flex-col items-center justify-between w-full">
               <div className="flex items-center gap-3">
-                {/* <div className="md:hidden">
-                  <button
-                    className="!bg-transparent !text-white !border-none cursor-pointer z-50"
-                    role="button"
-                    onClick={(e) => handleLeftPanelOpen(e)}
-                  >
-                    <CiSettings size={24} className="z-10" />
-                  </button> 
-                </div> */}
                 <div className="text-orange-400 text-lg font-mono">
                   {roomData.isPublic ? "[PUBLIC]" : "[SECURE]"}
                 </div>
@@ -570,7 +465,21 @@ const ChatRoom = () => {
 
           {/* Messages Area */}
           {
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div
+              className="h-9/10 overflow-y-auto p-4 space-y-4 safe-scroll"
+              ref={messageBoxRef}
+            >
+              {messages.length > MAX_MSG && (
+                <div
+                  role="button"
+                  className="flex w-full justify-center items-center underline underline-offset-3 cursor-pointer text-muted hover:text-orange-600"
+                  onClick={() =>
+                    setMaximumMsgShown((prev) => (prev += MAX_MSG))
+                  }
+                >
+                  ...load more messages
+                </div>
+              )}
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-20">
                   <div className="text-4xl mb-4 font-mono">[ENCRYPTED]</div>
@@ -580,7 +489,7 @@ const ChatRoom = () => {
                   </p>
                 </div>
               ) : (
-                messages.map((msg, i) => (
+                messages.slice(messageSliceStartPointer).map((msg, i) => (
                   <motion.div
                     key={i}
                     className={`flex ${
@@ -588,9 +497,9 @@ const ChatRoom = () => {
                         ? "justify-end"
                         : "justify-start"
                     }`}
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0.1, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
+                    transition={{ delay: 0.25 }}
                   >
                     <div
                       className={`max-w-[70%] ${
@@ -612,7 +521,10 @@ const ChatRoom = () => {
                             {msg.time}
                           </span>
                         </div>
-                        <p className="text-white text-sm break-words font-mono">
+                        <p
+                          className={`text-white text-sm break-words font-mono`}
+                          style={{ color: msg?.textColor }}
+                        >
                           {msg?.data}
                         </p>
                       </div>
@@ -627,7 +539,9 @@ const ChatRoom = () => {
           {
             <motion.form
               onSubmit={sendMessage}
-              className="p-4 border-t border-red-900/30 bg-black/30"
+              className={`h-1/10 p-4 border-t mt-auto border-red-900/30 bg-black/30 ${
+                isMobileAndShowRoomDetails && "h-auto"
+              }`}
               initial={{ y: 50 }}
               animate={{ y: 0 }}
               transition={{ delay: 0.05 }}
@@ -640,7 +554,9 @@ const ChatRoom = () => {
                   <input
                     type="text"
                     placeholder="Enter message..."
-                    className="w-full !pl-8 !pr-4 py-3 bg-black/50 border border-red-900/30 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:bg-black/70 transition-all font-mono"
+                    className={`w-full !pl-8 !pr-4 py-3 bg-black/50 border border-red-900/30 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:bg-black/70 transition-all font-mono ${
+                      isMobileAndShowRoomDetails && "py-0 h-fit"
+                    }`}
                     ref={inputRef}
                   />
                 </div>
@@ -651,7 +567,7 @@ const ChatRoom = () => {
                   SEND
                 </button>
               </div>
-            </motion.form> /*  */
+            </motion.form>
           }
         </motion.section>
       </div>
