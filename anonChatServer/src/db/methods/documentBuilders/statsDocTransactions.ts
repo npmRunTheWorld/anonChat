@@ -30,15 +30,30 @@ export let statsCache: StatsType;
 let flushTimeout: NodeJS.Timeout | null = null;
 
 export async function initStatsInMemCache() {
+  //this is the first document read <in future before restoring the system we need to flush the WAL RECORDS>
   statsCache = await readDoc(docStatPath);
   if (!statsCache) statsCache = initialStatsDoc;
+
+  if (statsCache.activeRooms !== 0) {
+    const DIRECT_WRITE = true;
+    updateStatsDoc(
+      {
+        activeRooms: 0,
+      },
+      DIRECT_WRITE
+    );
+    statsCache.activeRooms = 0;
+  }
 }
 
-export async function getStats() {
-  return statsCache;
+export async function getStatsDoc() {
+  return await readDoc(docStatPath);
 }
 
-export async function updateStatsDoc(updates: Partial<StatsType>) {
+export async function updateStatsDoc(
+  updates: Partial<StatsType>,
+  isDirectWrite?: boolean
+) {
   if (!statsCache) await initStatsInMemCache();
 
   Object.assign(updates, {
@@ -49,6 +64,11 @@ export async function updateStatsDoc(updates: Partial<StatsType>) {
     ...statsCache,
     ...updates,
   };
+
+  if (isDirectWrite) {
+    flushToDisk();
+    return;
+  }
 
   scheduleFlush();
 }

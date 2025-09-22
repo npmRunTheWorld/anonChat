@@ -80,7 +80,16 @@ const CreateRoomModals = ({
       title="Create Room"
     >
       {/* Fields */}
-      <form className="space-y-6" onSubmit={(e) => handleRoomCreation(e)}>
+      <form
+        className="space-y-6"
+        onSubmit={(e) => handleRoomCreation(e)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault(); // stops accidental line breaks
+            handleRoomCreation(e);
+          }
+        }}
+      >
         <div>
           <label
             className="block text-gray-400 text-xs font-mono uppercase mb-2"
@@ -147,6 +156,7 @@ const CreateRoomModals = ({
           <button
             onClick={() => setIsModalShowing(false)}
             className="flex-1 py-3 bg-transparent border border-gray-600 text-gray-400 font-mono uppercase text-sm hover:bg-gray-800 transition-all"
+            role="button"
           >
             Cancel
           </button>

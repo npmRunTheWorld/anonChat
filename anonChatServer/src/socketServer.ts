@@ -1,15 +1,14 @@
 import express from "express";
 import { initializeWebSocketServer } from "./sockets/index.ts";
-import loungeRouter from "./routes/LoungeInfo.ts";
+import loungeRouter from "./routes/loungeRoute.ts";
 import cors from "cors";
 import * as dotenv from "dotenv";
-import { initStats } from "./db/methods/docs/statsDocTransactions.ts";
 import { initDb } from "./db/scripts/initDb.ts";
+import { randomUUID } from "crypto";
+import { TLSSocket } from "tls";
 
 dotenv.config();
-const environment = process.env.ENVIRONMENT || "development";
 const port = process.env.PORT || 8000;
-const domain = process.env.DOMAIN || `localhost:${port}`;
 const allowedOrigins = process.env?.ALLOWED_ORIGINS?.split(",")?.map((url) => {
   return url.trim().toLowerCase();
 }) ?? [""];
@@ -38,6 +37,22 @@ app.use(
 
 app.use(express.json());
 
+//#MIDDLEWARE
+app.use((req, res, next) => {
+  const requestId = randomUUID();
+  console.log("req is entering", requestId);
+
+  res.setHeader("X-REQUEST-ID", requestId);
+  // optional: log each request
+  console.log(
+    `REQ-ID:[${requestId}] <${new Date().toLocaleTimeString()}> : ${
+      req.method
+    } ${req.originalUrl}`
+  );
+
+  next();
+});
+
 //#ROUTES
 const v1 = "/api/v1";
 app.use(`${v1}/loungeInfo`, loungeRouter);
@@ -49,6 +64,7 @@ app.set("trust proxy", 1);
 async function appInit() {
   await initDb();
 }
+
 const server = app.listen(port, () => {
   appInit();
   console.log("ANON CHAT listening on port: ", port);
@@ -57,8 +73,10 @@ const server = app.listen(port, () => {
 const { handleUpgrade } = initializeWebSocketServer();
 
 server.on("upgrade", (req, socket, head) => {
-  const protocol = req.socket.encrypted ? "https" : "http";
-  const { pathname } = new URL(req.url, `${protocol}://${req.headers.host}`);
+  const tslSocket = req.socket as TLSSocket
+  
+  const protocol = tslSocket.encrypted ? "https" : "http";
+  const { pathname } = new URL(req.url!, `${protocol}://${req.headers.host}`);
   console.log("socket upgrade, path: ", pathname);
   switch (pathname) {
     case "/chat":

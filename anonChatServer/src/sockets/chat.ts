@@ -1,5 +1,6 @@
 import {
   statsCache,
+  StatsType,
   updateStatsDoc,
 } from "@/db/methods/documentBuilders/statsDocTransactions.ts";
 import WebSocket, { WebSocketServer } from "ws";
@@ -241,17 +242,23 @@ function addUser(ws: CustomWebSocket, msg: ClientMessageType) {
 
     updateStatsDoc({
       activeRooms: statsCache?.activeRooms + 1,
-    });
+      shadowsOnline: statsCache.shadowsOnline + 1,
+    } as StatsType);
   } else {
     //other users (PARTICIPANTS)
     const prevRoomData = roomMap.get(ws.roomId);
     if (!prevRoomData) return;
 
-    roomMap.set(ws.roomId, {
+    const updatedRoomData = {
       ...prevRoomData,
       users: [...prevUsers, ws.usernameAndId],
       totalUsers: prevRoomData.totalUsers + 1,
-    });
+    };
+    roomMap.set(ws.roomId, updatedRoomData);
+
+    scheduleDbBatchUpdate({
+      shadowsOnline: statsCache.shadowsOnline + 1,
+    } as StatsType);
   }
 
   //room map --> has all users by username
@@ -278,6 +285,16 @@ function addUser(ws: CustomWebSocket, msg: ClientMessageType) {
   broadCastToRoomAndExcludeFollowingUsers(userActivity, ws, [
     `${ws.usernameAndId}`,
   ]);
+}
+
+let batchUpdateTimeout: NodeJS.Timeout | null = null;
+function scheduleDbBatchUpdate(data: StatsType) {
+  if (batchUpdateTimeout) clearTimeout(batchUpdateTimeout);
+
+  batchUpdateTimeout = setTimeout(() => {
+    console.log("batch update of room data started");
+    updateStatsDoc({ ...data });
+  }, 30000);
 }
 
 function logRoomData(ws: CustomWebSocket) {
@@ -332,8 +349,9 @@ function handleLastUserDisconnect(
 
     updateStatsDoc({
       activeRooms: statsCache?.activeRooms - 1,
-      totalUsers: room?.totalUsers,
-      secretsShared: room?.totalMessages,
+      shadowsOnline: statsCache?.shadowsOnline - 1,
+      totalUsers: statsCache.totalUsers + room?.totalUsers,
+      secretsShared: statsCache.secretsShared + room?.totalMessages,
     });
 
     roomMap.delete(ws.roomId);

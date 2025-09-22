@@ -1,10 +1,8 @@
 import express from "express";
-import { roomMap } from "./../sockets/chat.ts";
-import { userMap } from "./../sockets/chat.ts";
-import fs from 'fs';
-
+import { roomMap } from "../sockets/chat.ts";
 
 import { successResponse } from "../utils/fx/responseObject.ts";
+import { getStatsDoc } from "@/db/methods/documentBuilders/statsDocTransactions.ts";
 
 //ROUTE LOUNGEINFO
 const loungeRouter = express.Router();
@@ -44,26 +42,26 @@ function getAllRooms() {
   );
 }
 
-loungeRouter.route("/getRooms").get(async (req, res) => {
-  //console.log('returning data' , rooms);
-  const rooms = getPublicRooms();
-  successResponse({
-    res,
-    data: rooms,
+try {
+  loungeRouter.route("/getRooms").get(async (req, res) => {
+    //console.log('returning data' , rooms);
+    const rooms = getPublicRooms();
+    successResponse({
+      res,
+      data: rooms,
+    });
   });
-});
 
-loungeRouter.route("/getSiteDetails").get(async (req, res) => {
-  const rooms = getAllRooms();
-  
-  
-  successResponse({
-    res,
-    data: {
-      totalActiveRooms: rooms.length,    
-    }
-  })
-  
-});
+  loungeRouter.route("/getSiteDetails").get(async (req, res) => {
+    const stats = await getStatsDoc();
+    console.log("gettingSiteDetails ::: ", stats);
+    successResponse({
+      res,
+      data: stats,
+    });
+  });
+} catch (error) {
+  console.log("unexpected error at ROUTE: LOUNGEINFO -> ", error);
+}
 
 export default loungeRouter;

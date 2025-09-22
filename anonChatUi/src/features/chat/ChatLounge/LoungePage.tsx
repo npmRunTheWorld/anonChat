@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import CreateRoomModals from "@/components/ui/modals/CreateRoomModals";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +9,7 @@ import {
 import { validate as uuidValidate } from "uuid";
 import { apiUrl } from "@/utils/constants/envVar";
 import { BiUserCircle } from "react-icons/bi";
+import type { StatsType } from "@/assets/types/apiTypes";
 
 const ChatLounge = ({ roomsObj }: { roomsObj: Record<string, any> }) => {
   const rooms = Object.entries(roomsObj);
@@ -62,48 +63,150 @@ const ChatLounge = ({ roomsObj }: { roomsObj: Record<string, any> }) => {
   );
 };
 
+// Assuming you have a component to display the stats, like a StatsCard
+
 const LoungeAnalytics = () => {
-  const stats = [
-    { value: "127", label: "rooms", color: "text-red-400" },
-    { value: "2.4k", label: "shadows online", color: "text-orange-400" },
-    { value: "18.2k", label: "total users", color: "text-red-300" },
-    { value: "156k", label: "secrets shared", color: "text-orange-300" },
-  ];
+  // Use state to store the fetched stats data
+  const [loungeStats, setLoungeStats] = useState<StatsType | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  let refreshRate = 20000; //ms
+
+  // Utility function to format numbers
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + "M";
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + "k";
+    }
+    return num;
+  };
+
+  useEffect(() => {
+    async function getSiteDetails() {
+      try {
+        const siteDetailsRes = await fetch(
+          `${apiUrl}/loungeInfo/getSiteDetails`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const siteDetails = await siteDetailsRes.json();
+        // Update the state with the new data
+        setLoungeStats(siteDetails.data); // Assuming your successResponse returns { data: {...} }
+      } catch (error) {
+        console.error("Failed to fetch site details:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    const schedulePageRefresh = () => {
+      const timeout = setTimeout(() => {
+        getSiteDetails();
+        if (refreshRate > 180000) {
+          //reset rate when the exponential backoff reaches over 10mins
+          refreshRate = 20000;
+        } else {
+          refreshRate = refreshRate * 2;
+        }
+
+        schedulePageRefresh();
+      }, refreshRate);
+
+      return timeout;
+    };
+
+    getSiteDetails();
+    const timeoutId = schedulePageRefresh();
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.2, // Stagger the animation of the children by 0.2 seconds
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+    },
+  };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
-      {stats.map((stat, i) => (
-        <motion.div
-          key={stat.label}
-          className="text-center"
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: i * 0.2 }}
-        >
-          <div className={`text-4xl font-mono font-black ${stat.color} mb-2`}>
-            {stat.value}
-          </div>
-          <div className="text-gray-500 text-sm font-mono uppercase tracking-widest">
-            {stat.label}
-          </div>
-        </motion.div>
-      ))}
-    </div>
+    <motion.div
+      className="pt-4 pb-10 grid grid-cols-2 md:flex  md:flex-row justify-center items-center gap-8 md:gap-32 my-8"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      {isLoading ? (
+        <div className="text-gray-500">Loading...</div>
+      ) : loungeStats ? (
+        [
+          {
+            value: formatNumber(loungeStats.activeRooms),
+            label: "rooms",
+            color: "text-red-400",
+          },
+          {
+            value: formatNumber(loungeStats.shadowsOnline),
+            label: "shadows online",
+            color: "text-orange-400",
+          },
+          {
+            value: formatNumber(loungeStats.totalUsers),
+            label: "total users",
+            color: "text-red-300",
+          },
+          {
+            value: formatNumber(loungeStats.secretsShared),
+            label: "secrets shared",
+            color: "text-orange-300",
+          },
+        ].map((stat, index) => (
+          <motion.div
+            key={index}
+            className="flex flex-col items-center"
+            variants={itemVariants} // Apply the child animation variants
+          >
+            <div className={`text-4xl font-mono font-black ${stat.color}`}>
+              {stat.value}
+            </div>
+            <span className="text-gray-500 text-sm font-mono uppercase tracking-wider">
+              {stat.label}
+            </span>
+          </motion.div>
+        ))
+      ) : (
+        <div className="text-gray-500">Failed to load data.</div>
+      )}
+    </motion.div>
   );
 };
 
 const LoungePage = () => {
   const navigate = useNavigate();
   const [isModalShowing, setIsModalShowing] = useState(false);
-  const [username, setUsername] = useState(getStorageUsername);
   const [roomId, setRoomId] = useState("");
   const [roomsObj, setRoomsObj] = useState({});
   const [fieldError, setFieldError] = useState<Record<string, any>>({});
 
   useEffect(() => {
     async function getRoomInfo() {
-      console.log("api route: ", `${apiUrl}/api/v1/loungeInfo/getRooms`);
-      const roomRes = await fetch(`${apiUrl}/api/v1/loungeInfo/getRooms`, {
+      console.log("api route: ", `${apiUrl}/loungeInfo/getRooms`);
+      const roomRes = await fetch(`${apiUrl}/loungeInfo/getRooms`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -288,7 +391,6 @@ const LoungePage = () => {
                         "var(--color-red-800)",
                         "var(--color-orange-500)",
                         "var(--color-pink-800)",
-                        
                       ],
                     }}
                     transition={{
