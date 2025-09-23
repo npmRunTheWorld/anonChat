@@ -200,24 +200,19 @@ const RoomDetails = ({
               {isMobileAndShowRoomDetails ? <BiChevronDown /> : <BiMinus />}
             </span>
           </button>
-          <div className="flex flex-col md:hidden items-center justify-center w-full text-sm ">
-            <div className="flex items-center gap-2">
-              <div className="text-orange-400 text-sm font-mono">
-                {roomData.isPublic ? <BiLockOpen /> : <BiLock />}
+          <div className="flex flex-col md:hidden items-center justify-center w-fit text-sm ">
+            <div className="flex justify-center items-center">
+              <div className="text-orange-400 text-sm font-mono flex justify-end w-1/6">
+                <span className="w-fit">
+                  {roomData.isPublic ? <BiLockOpen /> : <BiLock />}
+                </span>
               </div>
 
-              <p className="text-gray-400 text-xs font-mono">
+              <p className="text-pretty text-center text-gray-400 text-xs font-mono w-5/6">
                 End-to-end encrypted • {messages.length} messages
               </p>
             </div>
-            {/* {
-                  <div className="flex items-center justify-end gap-2 w-full">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-green-400 text-xs uppercase font-mono">
-                      CONNECTED
-                    </span>
-                  </div>
-                } */}
+           
           </div>
 
           <button
