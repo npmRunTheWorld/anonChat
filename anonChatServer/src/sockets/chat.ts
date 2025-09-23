@@ -36,6 +36,8 @@ export type CustomWebSocket = WebSocket & {
   username: string;
   port: string;
   roomId: string;
+  isAlive?: boolean;
+  route?: string;
 };
 
 export type ClientMessageType =

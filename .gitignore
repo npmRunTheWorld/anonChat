@@ -25,3 +25,7 @@ dist-ssr
 
 /**/collections/*
 /**/logs/*
+*.env
+.env.*
+/**/.env*
+anonChatUi/.env.production

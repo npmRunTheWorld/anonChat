@@ -93,16 +93,16 @@ const RoomDetails = ({
           }`}
         >
           <div className="space-y-2">
-            <div className="text-orange-400 font-mono">
-              <span className="text-gray-500">&gt;</span> ROOM:{" "}
+            <div className="text-xs md:text-md text-orange-400 gap-2 font-mono">
+             ROOM:&nbsp;
               {roomData?.title?.length ? (
                 <span className="text-white">{roomData?.title}</span>
               ) : (
                 <span className="text-muted">###</span>
               )}
             </div>
-            <div className="text-gray-400 text-sm font-mono">
-              <span className="text-gray-500">&gt;</span> ID:{" "}
+            <div className="text-xs md:text-md text-gray-400 text-sm font-mono">
+              ID:&nbsp;
               <span className="text-orange-300">{id}</span>
             </div>
             {roomData.topics && roomData.topics.length > 0 && (

@@ -85,6 +85,7 @@ const LoungeAnalytics = () => {
   useEffect(() => {
     async function getSiteDetails() {
       try {
+        console.log('api url: : : ',`${apiUrl}`);
         const siteDetailsRes = await fetch(
           `${apiUrl}/loungeInfo/getSiteDetails`,
           {

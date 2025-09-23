@@ -13,7 +13,7 @@ const allowedOrigins = process.env?.ALLOWED_ORIGINS?.split(",")?.map((url) => {
   return url.trim().toLowerCase();
 }) ?? [""];
 
-console.log(allowedOrigins);
+console.log('allowed origins: ', allowedOrigins);
 
 const app = express();
 app.use(
@@ -30,7 +30,7 @@ app.use(
       return callback(null, true);
     },
     credentials: true,
-    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
@@ -55,6 +55,10 @@ app.use((req, res, next) => {
 
 //#ROUTES
 const v1 = "/api/v1";
+app.get(`${v1}`, (req, res) => {
+  res.send("Welcome to anonChat API V1");
+});
+
 app.use(`${v1}/loungeInfo`, loungeRouter);
 
 //ADDITIONAL SETTINGS
@@ -73,17 +77,17 @@ const server = app.listen(port, () => {
 const { handleUpgrade } = initializeWebSocketServer();
 
 server.on("upgrade", (req, socket, head) => {
-  const tslSocket = req.socket as TLSSocket
+  const tlsSocket = req.socket as TLSSocket
   
-  const protocol = tslSocket.encrypted ? "https" : "http";
+  const protocol = tlsSocket.encrypted ? "https" : "http";
   const { pathname } = new URL(req.url!, `${protocol}://${req.headers.host}`);
-  console.log("socket upgrade, path: ", pathname);
+  console.log("socket upgrade protocol:", protocol , "path: ", pathname);
   switch (pathname) {
-    case "/chat":
-      handleUpgrade(req, socket, head, "/chat");
+    case "/api/chat":
+      handleUpgrade(req, socket, head, "/api/chat");
       break;
-    case "/notification":
-      handleUpgrade(req, socket, head, "/notification");
+    case "/api/notification":
+      handleUpgrade(req, socket, head, "/api/notification");
       break;
     default:
       //unknown path

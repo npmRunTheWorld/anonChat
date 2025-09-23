@@ -1,23 +1,27 @@
 import { WebSocketServer } from "ws";
-import { setupChatHandler } from "./chat.ts";
+import { CustomWebSocket, setupChatHandler } from "./chat.ts";
+import { Request } from "express";
+import { TLSSocket } from "tls";
+import { IncomingMessage } from "http";
+import { Duplex } from "stream";
 
 export function initializeWebSocketServer() {
   const wss = new WebSocketServer({ noServer: true }); //handling upgrade manually
   console.log("hanling socket init");
   //console.log('initialzing connection on', req, socket, head, route);
 
-  wss.on("connection", (ws, req, route) => {
+  wss.on("connection", (ws: CustomWebSocket, req: Request, route: string) => {
     console.log("socket connection found on: ", req.socket.remotePort);
-    ws.port = req.socket.remotePort
+    ws.port = `${req.socket.remotePort}`;
     ws.route = route;
     ws.isAlive = true;
 
     switch (route) {
-      case "/chat":
+      case "/api/chat":
         setupChatHandler(ws, wss);
         break;
       default:
-        socket.write(`${req.protocol} 404 NOT FOUND FOR ROUTE ${route}`);
+        ws.send(`${req.protocol} 404 NOT FOUND FOR ROUTE ${route}`);
         break;
     }
 
@@ -35,11 +39,9 @@ export function initializeWebSocketServer() {
   });
 
   const heartbeat = setInterval(() => {
-    wss.clients.forEach((ws) => {
+    wss.clients.forEach((ws: any) => {
       if (!ws.isAlive) {
-        console.log(
-          `ping send pong failed, closing socket ${ws?.username ?? req.socket.remotePort}`
-        );
+        console.log(`ping send pong failed, closing socket ${ws?.username}`);
 
         return ws.terminate();
       }
@@ -52,8 +54,20 @@ export function initializeWebSocketServer() {
     clearInterval(heartbeat);
   });
 
-  function handleUpgrade(req, socket, head, route) {
+  function handleUpgrade(
+    req: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    route: string
+  ) {
+    const allowedRoutes = ["/api/chat"];
+    if (!allowedRoutes.includes(route)) {
+      socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+      socket.destroy();
+      return;
+    }
     wss.handleUpgrade(req, socket, head, (ws) => {
+      console.log('emitting connection');
       wss.emit("connection", ws, req, route);
     });
   }

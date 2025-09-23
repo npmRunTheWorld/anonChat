@@ -138,7 +138,11 @@ const ChatRoom = () => {
 
     //web socket connection
     console.log("api domain", apiDomain);
-    ws.current = new WebSocket(`ws://${apiDomain}/chat`);
+    ws.current = new WebSocket(
+      `${
+        window.location.protocol === "https:" ? "wss" : "ws"
+      }://${apiDomain}/chat`
+    );
 
     if (!ws.current) {
       return;
@@ -296,7 +300,7 @@ const ChatRoom = () => {
       return;
     }
 
-    const msg = inputRef?.current?.value ?? "";
+    const msg = inputRef.current.value.trim();
     if (!msg.length) return;
 
     console.log(msg);
@@ -327,7 +331,7 @@ const ChatRoom = () => {
   } */
 
   return (
-    <div className="min-h-screen w-full bg-black relative overflow-hidden font-mono">
+    <div className="min-h-screen min-h-[100dvh] w-full bg-black relative overflow-hidden font-mono">
       {/* Terminal grid background */}
       <NotificationStack
         notificationArr={notifications}
@@ -411,7 +415,7 @@ const ChatRoom = () => {
       </Modal>
       {/* MAIN */}
       <div
-        className="flex flex-col md:flex-row h-screen w-full p-6 gap-2 md:gap-2"
+        className="flex flex-col md:flex-row h-[100dvh] w-full p-6 gap-2 md:gap-2"
         id="main-chat"
         ref={mainChatRef}
       >
@@ -466,7 +470,7 @@ const ChatRoom = () => {
           {/* Messages Area */}
           {
             <div
-              className="h-9/10 overflow-y-auto p-4 space-y-4 safe-scroll"
+              className="h-8/10 overflow-y-auto p-4 space-y-4 safe-scroll"
               ref={messageBoxRef}
             >
               {messages.length > MAX_MSG && (
@@ -539,15 +543,15 @@ const ChatRoom = () => {
           {
             <motion.form
               onSubmit={sendMessage}
-              className={`h-1/10 p-4 border-t mt-auto border-red-900/30 bg-black/30 ${
+              className={`h-2/10 p-4 flex items-center justify-center border-t mt-auto border-red-900/30 bg-black/30 ${
                 isMobileAndShowRoomDetails && "h-auto"
               }`}
               initial={{ y: 50 }}
               animate={{ y: 0 }}
               transition={{ delay: 0.05 }}
             >
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
+              <div className="flex w-full gap-3">
+                <div className="flex-1 w-full relative">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-orange-400 text-sm font-mono">
                     &gt;
                   </span>
@@ -562,7 +566,8 @@ const ChatRoom = () => {
                 </div>
                 <button
                   type="submit"
-                  className="px-6 py-3 bg-orange-600 text-black font-bold uppercase text-sm hover:bg-orange-500 transition-all font-mono"
+                  className="px-6 py-3 bg-orange-600 text-black font-bold uppercase text-sm !hover:bg-orange-500 transition-all font-mono z-100"
+                  role="button"
                 >
                   SEND
                 </button>
