@@ -53,7 +53,7 @@ export type CustomWebSocket = WebSocket & {
 
 const ChatRoom = () => {
   const { id } = useParams();
-  const userSSkey = "anochat-username";
+  const userSSkey = "anonchat-username";
   const roomSSKey = "anonchat-roomData";
   const userSS = sessionStorage.getItem(userSSkey);
   const { isMobile } = useDeviceDetails();
@@ -126,7 +126,9 @@ const ChatRoom = () => {
 
     // WebSocket connection
     ws.current = new WebSocket(
-      `${window.location.protocol === "https:" ? "wss" : "ws"}://${apiDomain}/chat`
+      `${
+        window.location.protocol === "https:" ? "wss" : "ws"
+      }://${apiDomain}/chat`
     );
     if (!ws.current) return;
 
@@ -179,14 +181,14 @@ const ChatRoom = () => {
     };
   }, [username]);
 
-  useEffect(() => {
+  /*  useEffect(() => {
     let timeout: number | null = null;
     if (isMobile) {
       timeout = window.setTimeout(() => setIsShowRoomDetails(false), 3000);
     }
     scrollToLastMessage();
     return () => timeout && clearTimeout(timeout);
-  }, []);
+  }, []); */
 
   // --- Functions ---
   function scrollToLastMessage() {
@@ -237,7 +239,10 @@ const ChatRoom = () => {
       <NotificationStack
         notificationArr={notifications}
         setNotificationArr={setNotifications}
-        notiStackClass="items-end pr-5 pt-2 !h-15"
+        notificationOptions={{
+          root: "ml-auto",
+          outer: "items-end pr-5 pt-2 !h-15",
+        }}
       />
 
       {/* Effects */}
@@ -259,7 +264,10 @@ const ChatRoom = () => {
       />
 
       {/* Username entry */}
-      <ChatRoomUsernameEntryModal username={username} setUsername={setUserName} />
+      <ChatRoomUsernameEntryModal
+        username={username}
+        setUsername={setUserName}
+      />
 
       {/* Error modal */}
       <Modal isOpen={!!isError?.code} onClose={() => null} type="input">
@@ -285,7 +293,8 @@ const ChatRoom = () => {
               </button>
             </div>
             <p className="text-red-400 text-sm font-mono">
-              {isError.msg || "Username conflict detected. Choose different identifier."}
+              {isError.msg ||
+                "Username conflict detected. Choose different identifier."}
             </p>
           </div>
         )}

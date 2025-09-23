@@ -87,7 +87,7 @@ const MainChatArea = ({
 
   return (
     <motion.section
-      className={`h-7/10 md:h-full md:flex-1 flex flex-col bg-gray-900/20 border border-red-900/20 ${
+      className={`h-7/10 md:h-full md:w-4/5 flex flex-col bg-gray-900/20 border border-red-900/20 ${
         isMobileAndShowRoomDetails && "h-full"
       }`}
       initial={{ opacity: 0, y: 20 }}
@@ -118,7 +118,7 @@ const MainChatArea = ({
       </div>
 
       {/* Messages */}
-      <div className="h-8/10 overflow-y-auto p-4 space-y-4 safe-scroll" ref={messageBoxRef}>
+      <div className="h-8/10 overflow-y-scroll p-4 space-y-4 safe-scroll" ref={messageBoxRef}>
         {messages.length > MAX_MSG && (
           <div
             role="button"
