@@ -118,7 +118,7 @@ const MainChatArea = ({
       </div>
 
       {/* Messages */}
-      <div className="h-8/10 overflow-y-scroll p-4 space-y-4 safe-scroll" ref={messageBoxRef}>
+      <div className="h-8/10 overflow-y-auto p-4 space-y-4 safe-scroll" ref={messageBoxRef}>
         {messages.length > MAX_MSG && (
           <div
             role="button"
